@@ -1,0 +1,5 @@
+.env
+recordings/
+inbox/inbox.json
+__pycache__/
+*.pyc

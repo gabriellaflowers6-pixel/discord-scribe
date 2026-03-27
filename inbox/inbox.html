@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📥 Gabby's Inbox</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 24px 32px 16px;
+      border-bottom: 1px solid #1e2433;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header p { color: #64748b; font-size: 0.85rem; margin-top: 4px; }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 16px 32px 0;
+      border-bottom: 1px solid #1e2433;
+    }
+    .tab {
+      padding: 8px 16px;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #64748b;
+      border: none;
+      background: none;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab:hover { color: #e2e8f0; }
+    .tab.active { color: #818cf8; border-bottom-color: #818cf8; }
+
+    .content { padding: 24px 32px; }
+
+    .empty {
+      color: #475569;
+      text-align: center;
+      padding: 48px;
+      font-size: 0.9rem;
+    }
+
+    .item {
+      background: #161b27;
+      border: 1px solid #1e2433;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      gap: 12px;
+      transition: border-color 0.15s;
+    }
+    .item:hover { border-color: #2d3748; }
+    .item.done { opacity: 0.45; }
+
+    .item-check {
+      margin-top: 2px;
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      accent-color: #818cf8;
+      cursor: pointer;
+    }
+
+    .item-body { flex: 1; min-width: 0; }
+
+    .item-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .badge-Task    { background: #7f1d1d; color: #fca5a5; }
+    .badge-Review  { background: #1e3a5f; color: #93c5fd; }
+    .badge-Info    { background: #14532d; color: #86efac; }
+    .badge-File    { background: #3b0764; color: #d8b4fe; }
+    .badge-Other   { background: #1e293b; color: #94a3b8; }
+    .badge-Done    { background: #1e293b; color: #475569; }
+
+    .item-summary {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #e2e8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .item.done .item-summary { text-decoration: line-through; color: #475569; }
+
+    .item-meta {
+      font-size: 0.78rem;
+      color: #475569;
+      margin-top: 4px;
+    }
+
+    .item-url a {
+      font-size: 0.8rem;
+      color: #818cf8;
+      word-break: break-all;
+    }
+
+    details { margin-top: 8px; }
+    summary {
+      font-size: 0.78rem;
+      color: #475569;
+      cursor: pointer;
+      user-select: none;
+    }
+    summary:hover { color: #94a3b8; }
+    .raw-text {
+      margin-top: 6px;
+      background: #0f1117;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .stats {
+      font-size: 0.8rem;
+      color: #475569;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📥 Gabby's Inbox</h1>
+  <p id="last-updated">Loading…</p>
+</header>
+
+<div class="tabs">
+  <button class="tab active" data-tab="all">All</button>
+  <button class="tab" data-tab="Task">Tasks</button>
+  <button class="tab" data-tab="Review">Review</button>
+  <button class="tab" data-tab="Info">Info</button>
+  <button class="tab" data-tab="File">Files</button>
+  <button class="tab" data-tab="Other">Other</button>
+  <button class="tab" data-tab="done">Done</button>
+</div>
+
+<div class="content">
+  <div class="stats" id="stats"></div>
+  <div id="list"></div>
+</div>
+
+<script>
+  let items = [];
+  let activeTab = 'all';
+
+  async function loadInbox() {
+    try {
+      const res = await fetch('inbox.json?t=' + Date.now());
+      items = await res.json();
+      render();
+      document.getElementById('last-updated').textContent =
+        'Last updated: ' + new Date().toLocaleTimeString();
+    } catch (e) {
+      document.getElementById('last-updated').textContent = 'Could not load inbox.json';
+    }
+  }
+
+  function getVisible() {
+    if (activeTab === 'all')  return items.filter(i => !i.done);
+    if (activeTab === 'done') return items.filter(i => i.done);
+    return items.filter(i => !i.done && i.type === activeTab);
+  }
+
+  function render() {
+    const visible = getVisible();
+    const pending = items.filter(i => !i.done).length;
+    const done    = items.filter(i => i.done).length;
+    document.getElementById('stats').textContent =
+      `${pending} pending · ${done} done · ${items.length} total`;
+
+    const list = document.getElementById('list');
+    if (!visible.length) {
+      list.innerHTML = '<div class="empty">Nothing here.</div>';
+      return;
+    }
+
+    // Sort: newest first
+    const sorted = [...visible].sort((a, b) =>
+      new Date(b.submitted_at) - new Date(a.submitted_at)
+    );
+
+    list.innerHTML = sorted.map(item => {
+      const date = new Date(item.submitted_at).toLocaleDateString('en-US', {
+        month: 'numeric', day: 'numeric', year: 'numeric'
+      });
+      const badgeClass = item.done ? 'badge-Done' : `badge-${item.type}`;
+      const badgeLabel = item.done ? 'Done' : item.type;
+
+      return `
+        <div class="item${item.done ? ' done' : ''}" data-id="${item.id}">
+          <input type="checkbox" class="item-check" ${item.done ? 'checked' : ''}
+            onchange="toggleDone('${item.id}', this.checked)" />
+          <div class="item-body">
+            <div class="item-header">
+              <span class="badge ${badgeClass}">${badgeLabel}</span>
+              <span class="item-summary">${escHtml(item.summary)}</span>
+            </div>
+            <div class="item-meta">
+              @${escHtml(item.submitted_by)} · ${date} · <code style="font-size:0.75rem;color:#475569">${item.id}</code>
+            </div>
+            ${item.url ? `<div class="item-url"><a href="${escHtml(item.url)}" target="_blank" rel="noopener">${escHtml(item.url)}</a></div>` : ''}
+            ${item.raw && item.raw !== item.summary ? `
+            <details>
+              <summary>Raw message</summary>
+              <div class="raw-text">${escHtml(item.raw)}</div>
+            </details>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  async function toggleDone(id, checked) {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    item.done = checked;
+    render();
+    try {
+      await fetch('update_item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, done: checked }),
+      });
+    } catch (_) {
+      // Running locally without a server — write is best-effort
+    }
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      activeTab = btn.dataset.tab;
+      render();
+    });
+  });
+
+  loadInbox();
+  // Auto-refresh every 30 seconds
+  setInterval(loadInbox, 30000);
+</script>
+</body>
+</html>
