@@ -199,13 +199,19 @@ def classify_and_summarize(text, attachments, sender_name, is_short=False):
                 "- If someone tags themselves, it's a self-reminder — assign to THEM.\n"
                 "- If it says 'both', 'us', or 'we', assign to General.\n"
                 "- If you can't tell from the message, write ASSIGN: unknown\n\n"
-                "STEP 3 — Write the summary FROM THE PERSPECTIVE of what the assigned person needs to do.\n"
-                "Example: if Gabby says '@Gabby test anchorED' → summary should be 'Test anchorED for bugs' (not 'JoYI asked Gabby to...')\n\n"
-                "Reply with exactly four lines:\n"
+                "STEP 3 — Write TWO things:\n"
+                "TITLE: A short label (max 8 words). Like a subject line. Examples: 'Install Netlify GitHub app', 'Review stat graphic', 'Update Google Docs sharing'.\n"
+                "DETAIL: One sentence of context — the why or how. Only if needed. Leave blank if the title says it all.\n\n"
+                "IMPORTANT RULES FOR WRITING:\n"
+                "- The sender's name is already shown in the inbox. NEVER refer to them in third person ('someone said', 'a user remarked').\n"
+                "- Write the title/detail as if YOU are the sender. 'That kangaroo is pretty' NOT 'Note that someone remarked a kangaroo is pretty'.\n"
+                "- Just capture WHAT was said, don't narrate or editorialize. No 'no clear action indicated' — that's what the TYPE field is for.\n\n"
+                "Reply with exactly five lines:\n"
                 "ACTIONABLE: yes or no\n"
                 "ASSIGN: Gabby, JoYI, General, or unknown\n"
                 "TYPE: <one of: Task, Review, Info, File>\n"
-                "SUMMARY: <one sentence — what the assigned person needs to do or look at>"
+                "TITLE: <short label, max 8 words>\n"
+                "DETAIL: <one sentence of context, or blank>"
             ),
         }],
     )
@@ -213,7 +219,8 @@ def classify_and_summarize(text, attachments, sender_name, is_short=False):
     actionable = True
     assigned_to = "unknown"
     item_type = "Task"
-    summary = text[:80]
+    title = text[:60]
+    detail = ""
     for line in raw.splitlines():
         if line.startswith("ACTIONABLE:"):
             actionable = line.split(":", 1)[1].strip().lower() == "yes"
@@ -221,8 +228,13 @@ def classify_and_summarize(text, attachments, sender_name, is_short=False):
             assigned_to = line.split(":", 1)[1].strip()
         elif line.startswith("TYPE:"):
             item_type = line.split(":", 1)[1].strip()
+        elif line.startswith("TITLE:"):
+            title = line.split(":", 1)[1].strip()
+        elif line.startswith("DETAIL:"):
+            detail = line.split(":", 1)[1].strip()
         elif line.startswith("SUMMARY:"):
-            summary = line.split(":", 1)[1].strip()
+            # Backwards compat with old format
+            title = line.split(":", 1)[1].strip()
 
     if not actionable:
         return None
@@ -237,7 +249,7 @@ def classify_and_summarize(text, attachments, sender_name, is_short=False):
         else:
             assigned_to = "General"
 
-    return item_type, summary, assigned_to
+    return item_type, title, detail, assigned_to
 
 
 def extract_urls(text):
@@ -441,25 +453,55 @@ def format_person_inbox(items, person):
     done.sort(key=lambda x: x.get("submitted_at", ""), reverse=True)
     recent_done = done[:5]
 
+    # Split pending into action items vs updates
+    action_types = {"Task", "Review", "File"}
+    action_items = [i for i in pending if i.get("type") in action_types]
+    updates = [i for i in pending if i.get("type") not in action_types]
+
     type_emoji = {"Task": "\U0001f4cc", "Review": "\U0001f440", "Info": "\u2139\ufe0f", "File": "\U0001f4ce", "Other": "\U0001f4e6"}
-    lines = [f"## \U0001f4e5 {person}'s Inbox", f"**{len(pending)} pending item{'s' if len(pending) != 1 else ''}**\n"]
+    action_count = len(action_items)
+    update_count = len(updates)
+    lines = [f"## \U0001f4e5 {person}'s Inbox"]
+    if action_count:
+        lines.append(f"**{action_count} action item{'s' if action_count != 1 else ''}** \u00b7 {update_count} update{'s' if update_count != 1 else ''}\n")
+    elif update_count:
+        lines.append(f"**0 action items** \u00b7 {update_count} update{'s' if update_count != 1 else ''}\n")
 
     if not pending:
         lines.append("\U0001fa69 *All clear — nothing to do!* \U0001fa69")
     else:
-        for item in pending:
-            te = type_emoji.get(item["type"], "\U0001f4e6")
-            date = item["submitted_at"][:10]
-            tag = " \U0001f4c2" if item.get("assigned_to") == "General" else ""
-            lines.append(f"- {te} {item['summary']} — from @{item['submitted_by']} \u00b7 {date} \u00b7 ID: `{item['id']}`{tag}")
-        lines.append("")
+        if updates:
+            lines.append("**Updates**")
+            for item in updates:
+                te = type_emoji.get(item["type"], "\U0001f4e6")
+                lines.append(f"- {te} **{item['summary']}**")
+                detail = item.get("detail", "")
+                if detail:
+                    lines.append(f"  {detail}")
+                if item.get("url"):
+                    lines.append(f"  [view]({item['url']})")
+                lines.append(f"  *from @{item['submitted_by']} \u00b7 {item['submitted_at'][:10]} \u00b7 ID: `{item['id']}`*")
+            lines.append("")
+
+        if action_items:
+            lines.append("**Action Items**")
+            for item in action_items:
+                te = type_emoji.get(item["type"], "\U0001f4e6")
+                lines.append(f"- {te} **{item['summary']}**")
+                detail = item.get("detail", "")
+                if detail:
+                    lines.append(f"  {detail}")
+                if item.get("url"):
+                    lines.append(f"  [view]({item['url']})")
+                lines.append(f"  *from @{item['submitted_by']} \u00b7 {item['submitted_at'][:10]} \u00b7 ID: `{item['id']}`*")
+            lines.append("")
+
         lines.append("*Use `/done [id]` to mark items complete*")
 
     if recent_done:
         lines.append("")
         lines.append("**Recently completed**")
         for item in recent_done:
-            te = type_emoji.get(item["type"], "\U0001f4e6")
             lines.append(f"- ~~{item['summary']}~~ \u2705")
 
     return "\n".join(lines)
@@ -532,22 +574,24 @@ async def on_message(message):
     if ANTHROPIC_API_KEY:
         result = await asyncio.to_thread(classify_and_summarize, text or "(attachment)", attachments, sender_name, is_short)
     else:
-        result = ("Task", (text[:80] if text else "Attachment dropped"), "General")
+        result = ("Task", (text[:60] if text else "Attachment dropped"), "", "General")
 
     if result is None:
         # Not actionable — skip inbox entirely
         await message.add_reaction("👀")  # acknowledge we saw it
         return
 
-    item_type, summary, assigned_to = result
+    item_type, title, detail, assigned_to = result
 
     item_id = uuid.uuid4().hex[:8]
     item = {
         "id": item_id,
         "type": item_type,
-        "summary": summary,
+        "summary": title,
+        "detail": detail,
         "raw": text,
-        "url": urls[0] if urls else "",
+        "url": urls[0] if urls else (attachments[0]["url"] if attachments else ""),
+        "jump_url": message.jump_url,
         "submitted_by": sender_name,
         "submitted_at": datetime.datetime.utcnow().isoformat(),
         "assigned_to": assigned_to,
@@ -564,6 +608,14 @@ async def on_message(message):
 
 async def done_autocomplete(interaction: discord.Interaction, current: str):
     pending = [i for i in load_inbox() if not i["done"]]
+    # Filter by channel — only show items assigned to this person's inbox
+    # Items without assigned_to default to "General" (visible to both)
+    channel_id = interaction.channel_id
+    if channel_id == GABBY_INBOX_CHANNEL_ID:
+        pending = [i for i in pending if i.get("assigned_to", "General") in ("Gabby", "General")]
+    elif channel_id == JOYI_INBOX_CHANNEL_ID:
+        pending = [i for i in pending if i.get("assigned_to", "General") in ("JoYI", "General")]
+    # From any other channel (like drop-zone): show all pending items
     return [
         app_commands.Choice(
             name=f"[{i['type']}] {i['summary'][:80]} — @{i['submitted_by']}",
