@@ -201,7 +201,10 @@ def classify_and_summarize(text, attachments, sender_name, is_short=False):
                 "- If you can't tell from the message, write ASSIGN: unknown\n\n"
                 "STEP 3 — Write TWO things:\n"
                 "TITLE: A short label (max 8 words). Like a subject line. Examples: 'Install Netlify GitHub app', 'Review stat graphic', 'Update Google Docs sharing'.\n"
-                "DETAIL: One sentence of context — the why or how. Only if needed. Leave blank if the title says it all.\n\n"
+                "DETAIL: Context, reason, or steps. Rules:\n"
+                "- If there are multiple steps or instructions, write them as bullet points using • (e.g. '• Go to github.com/apps/netlify • Select joyirhyss-tech account • Grant access to FestivalLore • Save')\n"
+                "- If it's just context or a reason, write one sentence.\n"
+                "- Leave blank if the title says it all.\n\n"
                 "IMPORTANT RULES FOR WRITING:\n"
                 "- The sender's name is already shown in the inbox. NEVER refer to them in third person ('someone said', 'a user remarked').\n"
                 "- Write the title/detail as if YOU are the sender. 'That kangaroo is pretty' NOT 'Note that someone remarked a kangaroo is pretty'.\n"
@@ -211,7 +214,7 @@ def classify_and_summarize(text, attachments, sender_name, is_short=False):
                 "ASSIGN: Gabby, JoYI, General, or unknown\n"
                 "TYPE: <one of: Task, Review, Info, File>\n"
                 "TITLE: <short label, max 8 words>\n"
-                "DETAIL: <one sentence of context, or blank>"
+                "DETAIL: <context, steps as bullet points with •, or blank>"
             ),
         }],
     )
@@ -445,6 +448,27 @@ async def on_ready():
     print(f"Drop zone: {DROP_ZONE_CHANNEL_ID} | Gabby inbox: {GABBY_INBOX_CHANNEL_ID} | JoYI inbox: {JOYI_INBOX_CHANNEL_ID}")
 
 
+def _format_inbox_item(item, type_emoji):
+    """Format a single inbox item for Discord with blockquotes and bullet steps."""
+    te = type_emoji.get(item["type"], "\U0001f4e6")
+    detail = item.get("detail", "")
+    url = item.get("url", "")
+    link = f" \u2014 [view]({url})" if url else ""
+    result = [f"{te} **{item['summary']}**{link}"]
+    if detail:
+        # Split bullet points (•) into separate blockquote lines
+        if "\u2022" in detail:
+            for step in detail.split("\u2022"):
+                step = step.strip()
+                if step:
+                    result.append(f"> \u2022 {step}")
+        else:
+            result.append(f"> {detail}")
+    result.append(f"> *from @{item['submitted_by']} \u00b7 {item['submitted_at'][:10]} \u00b7 ID:* `{item['id']}`")
+    result.append("")
+    return result
+
+
 def format_person_inbox(items, person):
     """Format inbox summary filtered for one person (+ General items)."""
     pending = [i for i in items if not i["done"] and i.get("assigned_to") in (person, "General")]
@@ -473,27 +497,13 @@ def format_person_inbox(items, person):
         if updates:
             lines.append("**Updates**")
             for item in updates:
-                te = type_emoji.get(item["type"], "\U0001f4e6")
-                lines.append(f"- {te} **{item['summary']}**")
-                detail = item.get("detail", "")
-                if detail:
-                    lines.append(f"  {detail}")
-                if item.get("url"):
-                    lines.append(f"  [view]({item['url']})")
-                lines.append(f"  *from @{item['submitted_by']} \u00b7 {item['submitted_at'][:10]} \u00b7 ID: `{item['id']}`*")
+                lines.extend(_format_inbox_item(item, type_emoji))
             lines.append("")
 
         if action_items:
             lines.append("**Action Items**")
             for item in action_items:
-                te = type_emoji.get(item["type"], "\U0001f4e6")
-                lines.append(f"- {te} **{item['summary']}**")
-                detail = item.get("detail", "")
-                if detail:
-                    lines.append(f"  {detail}")
-                if item.get("url"):
-                    lines.append(f"  [view]({item['url']})")
-                lines.append(f"  *from @{item['submitted_by']} \u00b7 {item['submitted_at'][:10]} \u00b7 ID: `{item['id']}`*")
+                lines.extend(_format_inbox_item(item, type_emoji))
             lines.append("")
 
         lines.append("*Use `/done [id]` to mark items complete*")
