@@ -17,7 +17,11 @@ import whisper
 import anthropic
 
 # Load opus codec for voice receive decoding
-discord.opus.load_opus("/opt/homebrew/lib/libopus.dylib")
+import sys
+if sys.platform == "darwin":
+    discord.opus.load_opus("/opt/homebrew/lib/libopus.dylib")
+else:
+    discord.opus.load_opus("libopus.so.0")
 print(f"Opus loaded: {discord.opus.is_loaded()}")
 
 load_dotenv()
