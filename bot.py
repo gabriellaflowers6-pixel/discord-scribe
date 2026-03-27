@@ -562,6 +562,10 @@ async def on_message(message):
     _processed_message_ids.add(message.id)
 
     text = message.content or ""
+    # Resolve Discord mentions (<@123456>) to display names so the AI can read them
+    for user_mention in message.mentions:
+        text = text.replace(f"<@{user_mention.id}>", f"@{user_mention.display_name}")
+        text = text.replace(f"<@!{user_mention.id}>", f"@{user_mention.display_name}")
     urls = extract_urls(text)
     attachments = [{"filename": a.filename, "url": a.url} for a in message.attachments]
 
