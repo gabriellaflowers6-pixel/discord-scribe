@@ -258,10 +258,22 @@ curl -fsSL https://get.docker.com | sh
 
 #### 3. Clone and configure
 ```bash
-git clone YOUR_REPO_URL discord-scribe
-cd discord-scribe
-cp .env.example .env
-nano .env  # fill in your secrets
+git clone https://github.com/gabriellaflowers6-pixel/discord-scribe.git /root/discord-scribe
+cd /root/discord-scribe
+```
+Create .env using heredoc (nano mangles long lines on SSH):
+```bash
+cat > /root/discord-scribe/.env << 'EOF'
+DISCORD_BOT_TOKEN=your_token
+ANTHROPIC_API_KEY=your_key
+MEETING_NOTES_CHANNEL_ID=your_channel_id
+WHISPER_MODEL=base
+GUILD_ID=your_guild_id
+GUILD_IDS=guild1,guild2
+DROP_ZONE_CHANNEL_ID=your_channel_id
+GABBY_INBOX_CHANNEL_ID=your_channel_id
+JOYI_INBOX_CHANNEL_ID=your_channel_id
+EOF
 ```
 
 #### 4. Build and run
@@ -324,3 +336,36 @@ cd ~/Desktop/my\ projects/discord-scribe
 ### 6. Whisper model downloads on first run
 **Problem**: First `/endmeet` takes extra time because Whisper downloads ~150MB model.
 **Fix**: The Dockerfile pre-downloads the model during build so it's baked into the image.
+
+### 7. Opus path is hardcoded to macOS — breaks on Linux/Docker
+**Problem**: `bot.py` had `discord.opus.load_opus("/opt/homebrew/lib/libopus.dylib")` which only works on macOS with Homebrew. On Linux (Docker/VPS), opus is at `libopus.so.0`. Bot crashes in a restart loop.
+**Fix**: Platform detection in bot.py — `if sys.platform == "darwin"` loads the macOS path, else loads `libopus.so.0`. Already fixed in the codebase.
+
+### 8. discord-ext-voice-recv is alpha-only — pip won't install with >=
+**Problem**: All versions of `discord-ext-voice-recv` are pre-release (alpha). `pip install discord-ext-voice-recv>=0.5.0` finds nothing because pip ignores pre-release by default.
+**Fix**: Pin the exact alpha version in requirements.txt: `discord-ext-voice-recv==0.5.2a179`. Do NOT use `>=`.
+
+### 9. nano mangles long lines over SSH
+**Problem**: Pasting env vars with long API keys into `nano` over SSH adds line breaks and spaces, corrupting the values.
+**Fix**: Use `cat > .env << 'EOF'` heredoc instead of nano for creating .env files on the server.
+
+### 10. Docker container name conflicts on rebuild
+**Problem**: Running `docker run --name scribe` fails if the old container still exists (even if stopped).
+**Fix**: Always `docker stop scribe && docker rm scribe` before `docker run`. Full rebuild flow:
+```bash
+docker stop scribe && docker rm scribe
+cd /root/discord-scribe && git pull
+docker build -t scribe .
+docker run -d --name scribe --restart unless-stopped --env-file .env scribe
+```
+
+---
+
+## Current Production Setup
+- **Server**: Hetzner CX22 (~$4/mo, 2 vCPU, 4GB RAM, Nuremberg)
+- **Server IP**: 135.181.196.231
+- **OS**: Ubuntu 24.04
+- **Runs alongside**: Scout Bot (same server)
+- **GitHub repo**: https://github.com/gabriellaflowers6-pixel/discord-scribe
+- **Docker container name**: `scribe`
+- **Auto-restart**: yes (`--restart unless-stopped`)
