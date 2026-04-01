@@ -10,19 +10,33 @@ Records Discord voice channel audio, transcribes with Whisper, summarizes with C
 - `/done` — mark an inbox item done; shows a searchable autocomplete dropdown of all pending items
 ## Drop Zone Inbox System
 - **#drop-zone** — anyone posts tasks, links, files, notes, requests here
-- **#gabbys-inbox** — Gabby's personal to-do list channel. One clean message at all times showing pending items + last 5 completed.
+- **#gabbys-inbox** — Gabby's personal to-do list channel. One clean message at all times.
 - **#joyis-inbox** — JoYI's personal to-do list channel. Same format as Gabby's.
+- **SB Bot is BLOCKED** from posting in both inbox channels (channel permission deny SendMessages). Only scribe posts inbox summaries.
 - **Self-cleaning channels**: every time the inbox updates, ALL messages in the inbox channel are deleted and one fresh summary is posted. No clutter, ever.
 - **Disco ball**: when all items are done, a disco ball GIF embed appears (via `discord.Embed` with `.set_image()`).
+
+### Inbox Format (3 sections)
+1. **Updates** — FYI items, no action needed (Info/Other types). Shown first.
+2. **Action Items** — to-dos that need doing (Task/Review/File types). Shown second.
+3. **Recently Completed** — last 5 done items with strikethrough + ✅.
+- Header shows: `**X action items** · Y updates` (updates don't count as pending)
+- Each item uses Discord blockquotes (`>`) for detail + metadata
+- **Short titles**: AI writes max 8-word subject line, not a full paragraph
+- **Detail line**: one sentence of context, or bullet steps (`•`) for multi-step instructions
+- **Links**: shown as clickable `[view](url)` after the title
+- **No third-person narration**: "That kangaroo is pretty" not "Note that someone remarked..."
+- **Mention resolution**: Discord `<@id>` mentions are converted to `@DisplayName` before AI classification
+
+### Filtering & Assignment
 - **Smart filtering**: messages with 4+ words always go through as actionable. Only very short messages (3 words or less, no links/attachments) get filtered by Claude — and even then, only true filler like "ok", "yeah", "lol" gets skipped (bot reacts with 👀). Everything else makes the cut.
 - **Auto-assignment by person**: Claude reads the message to figure out who it's for (by name, @mention, or context). If unclear, falls back to "the other person" — JoYI drops something → assigned to Gabby, Gabby drops something → assigned to JoYI. Self-tagging (Gabby writes "@Gabby do X") = self-reminder, assigned to Gabby. If meant for both, assigned to General.
-- **Summaries are action-focused**: "Test anchorED for bugs" not "JoYI asked Gabby to test..."
 - **Concurrency lock**: `_inbox_lock` prevents duplicate items from one message
 - Deduplication: Discord message ID tracked in memory — same message never processed twice
 - Mark done: `/done` in Discord (autocomplete picks from pending list) or checkbox in `inbox.html`
-- Data stored at `inbox/inbox.json` — each item has an `assigned_to` field (Gabby, JoYI, or General)
+- Data stored at `inbox/inbox.json` — each item has `assigned_to`, `summary`, `detail`, `url` fields
 - View in browser: `inbox/inbox.html` (tabs: All / Tasks / Review / Info / Files / Other / Done)
-- **IMPORTANT**: when restarting, kill ALL `Python bot.py` processes first (`pkill -9 -f "Python bot.py"`) — old zombie instances cause duplicate processing
+- **IMPORTANT**: scribe ignores ALL bot messages in drop-zone. Only human messages get processed.
 
 ## Inbox Channel IDs
 - `GABBY_INBOX_CHANNEL_ID=1482115278572748892`
@@ -177,8 +191,9 @@ Scribe will run on both TPC and Women Build Safety (WBS) servers. Needs:
 - Config dict per server (channel IDs, user names, inbox rules)
 - Currently hardcoded for TPC — needs refactor to support multiple guilds
 - **TPC Server ID**: `1478130696739618901` — Discord MCP: `discord` (`mcp__discord__*` tools)
-- **WBS Server ID**: `1486242055100432437` — Discord MCP: `discord-wbs` (`mcp__discord-wbs__*` tools)
+- **WBS Server ID**: `1486220693971669074` — Discord MCP: `discord-wbs` (`mcp__discord-wbs__*` tools)
 - Both MCPs use the same bot token, different guild IDs
+- WBS MCP fixed 2026-04-01: re-added with `npx -y @quadslab.io/discord-mcp` (old local node path was broken). Needs Claude Code restart to connect.
 - WBS channels/inboxes: TBD — need to create channels and decide structure
 
 ---
@@ -369,3 +384,73 @@ docker run -d --name scribe --restart unless-stopped --env-file .env scribe
 - **GitHub repo**: https://github.com/gabriellaflowers6-pixel/discord-scribe
 - **Docker container name**: `scribe`
 - **Auto-restart**: yes (`--restart unless-stopped`)
+
+---
+
+## Archive (moved from Second Brain 2026-03-29)
+
+### [2026-03-25] TPC Resources Channel Done
+
+TPC Office Discord — Resources Channel DONE (2026-03-25)
+
+UPDATE: The #resources channel has been created and populated with SB content. This task is complete.
+
+Server: TPC Office (Guild ID: 1478130696739618901)
+
+**What was built:**
+- #resources channel created with SB content posted
+- Design Resources channel created (left empty as planned)
+
+**What was included:**
+Professional knowledge from Second Brain: dev tips, design tools, workflow insights, Claude Code tips, UI generation tools, AI ad tools, mobile preview tips, terminal setup tips, etc.
+
+**What was skipped (as planned):**
+- Design inspo sites
+- Pebble (pb) related content
+- AnchorED session notes
+
+### [2026-03-11] TPC Channel Setup Plan
+
+TPC Office Discord — Channel Setup Plan (2026-03-11)
+
+Server: TPC Office (Guild ID: 1478130696739618901)
+Bot: SB Bot#4926
+
+**What to build:** Create a #resources channel (or category with sub-channels) and populate it with SB content.
+
+**What to include:** Post content from Second Brain (open-brain) — all professional knowledge: dev tips, design tools, workflow insights, Claude Code tips, UI generation tools, AI ad tools, mobile preview tips, terminal setup tips, etc.
+
+**What to SKIP:**
+- Design inspo sites (e.g. Gabby's favorite site: Yamauchi No.10 y-n10.com — do NOT post)
+- Anything Pebble (pb) related — skip all Pebble app notes for now
+- AnchorED session notes (project-specific, not resources)
+
+**Design Resources channel:** Create the channel but leave it empty — no content posted there.
+
+**Next step:** After restarting Claude Code (so Discord MCP loads), create the channel structure and post filtered SB content.
+
+### [2026-03-11] Discord MCP Connector
+
+Discord MCP Connector — Now Available and Connected (2026-03-11)
+
+Previous SB note said "Discord has NO MCP connector" — this is outdated and no longer true.
+
+**What was set up:**
+- Package: @quadslab.io/discord-mcp (HardHeadHackerHead/discord-mcp)
+- 134 admin tools across 20 categories (channels, messages, roles, members, threads, forums, webhooks, etc.)
+- Added to Claude Code user config via `claude mcp add`
+- Bot name: set up by Gabby in Discord Developer Portal
+- Server: TPC Office (Guild ID: 1478130696739618901)
+- Invite: https://discord.gg/UuaSGWSF
+
+**How it was configured:**
+```
+claude mcp add discord -e DISCORD_TOKEN=<token> -e DISCORD_GUILD_ID=1478130696739618901 -s user -- npx -y @quadslab.io/discord-mcp
+```
+Config stored in ~/.claude.json
+
+Requires restart of Claude Code to activate. After restart, Claude can directly create channels, post messages, manage roles, etc. in the TPC Office Discord server.
+
+### [2026-03-27] Discord Scribe Bot
+
+Discord Scribe Bot ("scribe bot") — Gabby's Discord voice meeting recorder. Records voice channel audio, transcribes with Whisper, summarizes with Claude, posts meeting notes + downloadable files (summary, action items, transcript). Commands: /meet, /endmeet, /ping. Project lives at /Users/gabriellakalvaitis-flowers/Desktop/my projects/discord-scribe/. Full context file with architecture, Dave E2EE patches, debugging checklist, and how to rebuild from scratch: brains/scribe-context.md. ALWAYS open that file before working on this bot. Must run with Python 3.11 (/opt/homebrew/bin/python3.11), NOT system Python. Critical detail: Discord enforces Dave E2EE on voice since March 2026 — voice_recv needs monkey-patches to handle it (all documented in the context file).

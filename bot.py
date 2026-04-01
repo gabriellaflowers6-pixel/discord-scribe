@@ -191,14 +191,16 @@ def classify_and_summarize(text, attachments, sender_name, is_short=False):
                 f"Message: {text}{attachment_note}\n\n"
                 "STEP 1 — Is this actionable?\n"
                 f"{'This is a short message. ONLY say NO if it is literally a one-word reaction with zero meaning (ok, yeah, nice, lol, great). Anything else is YES.' if is_short else 'This message is more than a few words — it is ALWAYS actionable. Say YES.'}\n\n"
-                "STEP 2 — Who is this task/item FOR? (who needs to act on it)\n"
+                "STEP 2 — Who is this task/item FOR? (who needs to see/act on it)\n"
                 "Think carefully about the sender vs the recipient:\n"
-                "- If Gabby writes '@Gabby do X' or 'I need to do X', she's reminding HERSELF. Assign to Gabby.\n"
+                "- If Gabby writes '@Gabby do X' or 'remind me to X', she's reminding HERSELF. Assign to Gabby.\n"
                 "- If Gabby writes '@JoYI do X' or 'JoYI please X', it's for JoYI. Assign to JoYI.\n"
                 "- If JoYI writes '@Gabby do X', it's for Gabby. Assign to Gabby.\n"
                 "- If someone tags themselves, it's a self-reminder — assign to THEM.\n"
                 "- If it says 'both', 'us', or 'we', assign to General.\n"
-                "- If you can't tell from the message, write ASSIGN: unknown\n\n"
+                "- STATUS UPDATES: If someone says what THEY will do ('I'll be there at 7', 'I'm running late', 'I finished the PR'), that is an update FOR THE OTHER PERSON, not a self-task. Assign to the other person.\n"
+                "- DEFAULT RULE: drop-zone is for telling the other person something. If the message is not explicitly a self-reminder, assign to the other person.\n"
+                "- If you truly can't tell, write ASSIGN: unknown\n\n"
                 "STEP 3 — Write TWO things:\n"
                 "TITLE: A short label (max 8 words). Like a subject line. Examples: 'Install Netlify GitHub app', 'Review stat graphic', 'Update Google Docs sharing'.\n"
                 "DETAIL: Context, reason, or steps. Rules:\n"
@@ -840,10 +842,15 @@ async def process_recording(session, channel, wav_path):
         summarize_transcript, transcript, channel_name, duration
     )
 
-    # Post results — find meeting-notes channel in the same guild, fall back to env var, then current channel
+    # Post results — route based on which voice channel was recorded
+    # Admin voice channels get their own admin-meeting-notes channel
     notes_channel = None
     if channel.guild:
-        notes_channel = discord.utils.get(channel.guild.text_channels, name="meeting-notes")
+        voice_name = channel_name.lower()
+        if "admin" in voice_name:
+            notes_channel = discord.utils.get(channel.guild.text_channels, name="admin-meeting-notes")
+        if not notes_channel:
+            notes_channel = discord.utils.get(channel.guild.text_channels, name="meeting-notes")
     if not notes_channel and NOTES_CHANNEL_ID:
         notes_channel = bot.get_channel(NOTES_CHANNEL_ID)
     if not notes_channel:
