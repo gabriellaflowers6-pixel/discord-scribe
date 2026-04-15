@@ -521,6 +521,30 @@ def format_person_inbox(items, person):
 
 DISCO_BALL_GIF = "https://media1.tenor.com/m/nCN1ddz8rVMAAAAC/disco-ball.gif"
 
+
+async def _send_long(channel, content, max_len=2000):
+    """Send content, splitting across messages at paragraph boundaries if over Discord's 2000-char limit."""
+    if len(content) <= max_len:
+        await channel.send(content)
+        return
+    chunks, current = [], ""
+    for para in content.split("\n\n"):
+        candidate = f"{current}\n\n{para}" if current else para
+        if len(candidate) <= max_len:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            while len(para) > max_len:
+                chunks.append(para[:max_len])
+                para = para[max_len:]
+            current = para
+    if current:
+        chunks.append(current)
+    for chunk in chunks:
+        await channel.send(chunk)
+
+
 async def update_inbox_summary():
     """Refresh the inbox channel: delete all old messages, post fresh summary."""
     items = load_inbox()
@@ -549,7 +573,7 @@ async def update_inbox_summary():
             pass
 
         # Post fresh summary
-        await channel.send(content)
+        await _send_long(channel, content)
 
         # If inbox is clear, post disco ball GIF as an embed so it actually shows
         if not pending:
